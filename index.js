@@ -1,6 +1,8 @@
 require('dotenv').config();
+
 const { Telegraf } = require('telegraf');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
