@@ -12,14 +12,14 @@ Bot Telegram berbasis AI yang menghasilkan to-do list harian dalam format `.md` 
 ## Persiapan
 
 - Node.js >= 18
-- Obsidian vault di komputer kamu
+- Obsidian vault di komputer kamu (direkomendasikan untuk disinkronisasi)
 - Akun Telegram
 - API key Google Gemini
 
 ## Instalasi
 
 ```bash
-git clone https://github.com/username/todo-bot.git
+git clone https://github.com/gazza-bot/todo-bot.git
 cd todo-bot
 npm install
 ```
