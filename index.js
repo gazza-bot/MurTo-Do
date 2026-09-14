@@ -60,16 +60,14 @@ function resolveTargetDate(userText) {
 
   if (lower.includes('besok')) {
     target.setDate(now.getDate() + 1);
-  } else if (lower.includes('hari ini')) {
-    // tetap hari ini, gak perlu diubah
   } else if (now.getHours() >= CUTOFF_JAM) {
     target.setDate(now.getDate() + 1);
   }
-
+  // jika tidak include besok / tidak pada jam melebihi jam 18 mmaka return date now
   return target;
 }
 
-// Prompt template: gabungin jadwal tetap + rutinitas + input dinamis dari user
+// Prompt template: gabungin jadwal tetap + rutinitas + input dari user
 function buildPrompt(userText) {
   const targetDate = resolveTargetDate(userText);
   const hari = getNamaHari(targetDate);
@@ -94,50 +92,60 @@ ${userText}
 """
 
 INSTRUKSI OUTPUT:
-1. Gabungkan jadwal kuliah + rutinitas tetap + tugas tambahan dari user, urutkan berdasarkan waktu (yang tanpa waktu spesifik taruh di bawah)
-2. Output HANYA markdown, dengan format:
+1. Gabungkan jadwal kuliah + rutinitas tetap + tugas tambahan dari user, urutkan berdasarkan waktu.
+2. Jika pengguna tidak menuliskan waktu task secara spesifik, maka masukkan dalam jam yang kosong (asumsikan pengguna menerima dan asumsikan kegiatan berjalan selama 1 jam).
+3. Output HANYA markdown, dengan format:
    - Frontmatter YAML (---) berisi: date, day, tags
    - Heading: "To-Do List ${hari}, ${tanggal}"
    - Checklist per item (- [ ] ) format: "[jam] Nama kegiatan (lokasi kalau ada)"
-3. Jangan tambahkan penjelasan di luar markdown, jangan pakai code block pembungkus (\`\`\`)`;
+4. Jangan tambahkan penjelasan di luar markdown, jangan pakai code block pembungkus (\`\`\`)`;
 }
 
-// Handler buat command /start
+const VAULT_PATH = process.env.VAULT_PATH;
+const VAULT_FOLDER = 'TODO-BOT';
+
+function saveToVault(fileName, content) {
+  const targetDir = path.join(VAULT_PATH, VAULT_FOLDER);
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  const targetPath = path.join(targetDir, fileName);
+  fs.writeFileSync(targetPath, content, 'utf-8');
+  return targetPath;
+}
+
 bot.start((ctx) => {
   ctx.reply('Halo! Kirim jadwal harian kamu, nanti aku ubah jadi file .md buat Obsidian.');
 });
-
+ 
 // Handler buat semua pesan teks biasa -> generate markdown
 bot.on('text', async (ctx) => {
   const userText = ctx.message.text;
   console.log('Pesan masuk:', userText);
-
+ 
   try {
     await ctx.reply('Lagi diproses...');
-
+ 
     const result = await model.generateContent(buildPrompt(userText));
     const markdown = result.response.text();
-
-    // Simpan ke file sementara
-    const fileName = `${new Date().toISOString().split('T')[0]}.md`;
-    const filePath = path.join(os.tmpdir(), fileName);
-    fs.writeFileSync(filePath, markdown, 'utf-8');
-
-    // Kirim file .md balik ke user
-    await ctx.replyWithDocument({ source: filePath, filename: fileName });
-
-    // Bersihin file sementara
-    fs.unlinkSync(filePath);
+ 
+    // Simpan langsung ke folder vault Obsidian
+    const fileName = `To-Do ${new Date().toISOString().split('T')[0]}.md`;
+    const savedPath = saveToVault(fileName, markdown);
+ 
+    // Kirim file .md juga ke Telegram sebagai konfirmasi
+    await ctx.replyWithDocument({ source: savedPath, filename: fileName });
+    await ctx.reply(`Beres, note udah tersimpan di ${VAULT_FOLDER}/${fileName} di vault kamu.`);
   } catch (err) {
     console.error('Error:', err);
     ctx.reply('Waduh, ada error pas generate. Coba lagi ya.');
   }
 });
-
+ 
 // Jalankan bot pakai polling
 bot.launch();
 console.log('Bot jalan...');
-
+ 
 // Biar bot berhenti dengan bersih kalau di-Ctrl+C
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
